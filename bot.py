@@ -18,8 +18,12 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHAT_IDS = [c.strip() for c in os.environ.get("CHAT_ID", "").split(",") if c.strip()]
 CHANNEL = "Odessa_svet_voda"
 GROUP = "2.2"                # твоя очередь
-NOTIFY_EMERGENCY = True      # присылать и аварийные изменения по твоей очереди
+NOTIFY_EMERGENCY = False     # присылать и аварийные изменения по твоей очереди (посты "ДТЕК: зміни по відключеннях")
 STATE_FILE = "state.json"
+# Публичная ссылка на welcome.jpg в репозитории (raw.githubusercontent.com/.../main/welcome.jpg).
+# Если оставить пустым, приветствие уйдёт обычным текстом, без фото.
+WELCOME_PHOTO_URL = os.environ.get("WELCOME_PHOTO_URL", "").strip()
+WELCOME_TEXT = f"Welcome to the Odessa World Bot, group {GROUP}"
 
 GROUP_RE = re.escape(GROUP)
 INTERVAL_RE = re.compile(r"(\d{1,2}):(\d{2})\s*[–—-]\s*(\d{1,2}):(\d{2})")
@@ -52,6 +56,17 @@ def send(chat_id, text):
     except Exception as e:
         print("Не удалось отправить сообщение:", safe(e))
         return False
+
+
+def send_welcome(chat_id, caption):
+    """Приветствие при первом запуске: с фото, если задан WELCOME_PHOTO_URL, иначе текстом."""
+    if WELCOME_PHOTO_URL:
+        try:
+            tg("sendPhoto", chat_id=chat_id, photo=WELCOME_PHOTO_URL, caption=caption)
+            return True
+        except Exception as e:
+            print("Не удалось отправить фото, пробую текстом:", safe(e))
+    return send(chat_id, caption)
 
 
 # ---------- чтение канала ----------
@@ -179,10 +194,12 @@ def main():
         print("В канале не нашлось постов (страница пустая или изменился формат).")
         return
     msgs = process(posts, state, notify=not first)   # первый запуск: только запоминаем
-    if first:
-        msgs = [f"✅ Бот запущен, слежу за очередью {GROUP}.\n\n" + current_text(state)]
     state["init"] = True
     ok = True
+    if first:
+        caption = WELCOME_TEXT + "\n\n" + current_text(state)
+        for chat_id in CHAT_IDS:
+            ok = send_welcome(chat_id, caption) and ok
     for m in msgs:
         for chat_id in CHAT_IDS:
             ok = send(chat_id, m) and ok
